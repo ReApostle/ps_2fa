@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+  <meta name="referrer" content="no-referrer">
+  <title>PlayStation 2FA</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎮</text></svg>">
+  <style>
+    :root {
+      --bg-base: #0b0b0d;
+      --bg-head: #0f0f10;
+      --bg-card: #141415;
+      --bg-raised: #19191b;
+      --bg-control: #232325;
+      --border: rgba(237, 237, 237, 0.08);
+      --border-strong: rgba(237, 237, 237, 0.14);
+      --text-primary: #ededed;
+      --text-secondary: #a1a1a6;
+      --text-muted: #85858b;
+      --accent: #3b82f6;
+      --positive: #4cc38a;
+      --negative: #e5484d;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+      --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      min-height: 100vh;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      user-select: none;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Asynchronous 2-layer PlayStation symbols background (GPU translate3d only) */
+    .bg-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+      background-color: var(--bg-base);
+      contain: strict;
+    }
+    .bg-glow {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      background: radial-gradient(
+        circle at 50% 42%,
+        rgba(59, 130, 246, 0.12) 0%,
+        rgba(15, 15, 18, 0.45) 48%,
+        rgba(11, 11, 13, 0.96) 82%
+      );
+    }
+    .ps-tile {
+      position: absolute;
+      inset: -340px;
+      will-change: transform;
+      backface-visibility: hidden;
+      background-repeat: repeat;
+    }
+    .ps-tile-main {
+      z-index: 2;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg fill='none' stroke='%2360a5fa' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='28,16 36,30 20,30' stroke-opacity='0.09' transform='rotate(-16 28 24)'/%3E%3Ccircle cx='116' cy='34' r='7.5' stroke-opacity='0.07'/%3E%3Cpath d='M70,74 L82,86 M82,74 L70,86' stroke-opacity='0.085' transform='rotate(19 76 80)'/%3E%3Crect x='22' y='114' width='14' height='14' rx='2' stroke-opacity='0.065' transform='rotate(24 29 121)'/%3E%3Cpolygon points='128,116 135,129 121,129' stroke-opacity='0.06' transform='rotate(14 128 124)'/%3E%3C/g%3E%3C/svg%3E");
+      background-size: 160px 160px;
+      animation: driftAsyncA 23s linear infinite;
+    }
+    .ps-tile-deep {
+      z-index: 1;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='210' height='210' viewBox='0 0 210 210'%3E%3Cg fill='none' stroke='%23a1a1a6' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='46' cy='52' r='11' stroke-opacity='0.045'/%3E%3Crect x='144' y='28' width='20' height='20' rx='3' stroke-opacity='0.04' transform='rotate(-22 154 38)'/%3E%3Cpolygon points='108,114 119,134 97,134' stroke-opacity='0.05' transform='rotate(18 108 126)'/%3E%3Cpath d='M36,156 L54,174 M54,156 L36,174' stroke-opacity='0.04' transform='rotate(-11 45 165)'/%3E%3C/g%3E%3C/svg%3E");
+      background-size: 210px 210px;
+      animation: driftAsyncB 37s linear infinite;
+    }
+    @keyframes driftAsyncA {
+      from { transform: translate3d(0, 0, 0); }
+      to   { transform: translate3d(160px, -320px, 0); }
+    }
+    @keyframes driftAsyncB {
+      from { transform: translate3d(0, 0, 0); }
+      to   { transform: translate3d(-210px, -210px, 0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ps-tile { animation: none; }
+    }
+
+    /* Card */
+    .card {
+      position: relative;
+      z-index: 1;
+      max-width: 380px;
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-strong);
+      border-radius: 16px;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.65);
+      overflow: hidden;
+      contain: layout style;
+    }
+
+    .card-head {
+      padding: 14px 18px;
+      background: var(--bg-head);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border-strong);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-primary);
+      flex-shrink: 0;
+    }
+    .brand-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+    .status-quiet {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .dot-ok {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--positive);
+    }
+
+    .card-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Credentials block (Email & optional Password) */
+    .creds-box {
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .creds-box.hidden { display: none; }
+    .cred-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 28px;
+    }
+    .cred-row + .cred-row {
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+    .cred-row.hidden { display: none; }
+    .cred-left {
+      min-width: 0;
+      flex: 1;
+    }
+    .cred-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.2;
+    }
+    .cred-val {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      color: var(--text-primary);
+      margin-top: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      user-select: text;
+    }
+    .cred-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .btn-mini {
+      height: 26px;
+      padding: 0 9px;
+      border-radius: 6px;
+      background: var(--bg-control);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s var(--ease), color 0.15s var(--ease);
+    }
+    .btn-mini:hover { color: var(--text-primary); }
+    .btn-mini.icon-only { width: 26px; padding: 0; }
+
+    /* Code box */
+    .code-box {
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .code-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .timer-num {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .timer-num.warn { color: var(--negative); }
+
+    .code-main {
+      text-align: center;
+      padding: 4px 0 2px;
+      cursor: pointer;
+    }
+    .code-val {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 38px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      color: #ffffff;
+      line-height: 1.1;
+      min-height: 42px;
+    }
+    .code-next {
+      margin-top: 8px;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .code-next span { color: var(--text-secondary); }
+
+    .timer-track {
+      width: 100%;
+      height: 3px;
+      background: var(--bg-control);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .timer-bar {
+      width: 100%;
+      height: 100%;
+      background: var(--accent);
+      transform-origin: left;
+      will-change: transform;
+      transition: transform 1s linear, background-color 0.2s var(--ease);
+    }
+    .timer-bar.warn { background: var(--negative); }
+
+    .btn-primary {
+      width: 100%;
+      height: 40px;
+      border-radius: 8px;
+      background: var(--text-primary);
+      color: var(--bg-head);
+      border: none;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background-color 0.15s var(--ease), transform 0.1s var(--ease);
+    }
+    .btn-primary:hover { background: #ffffff; }
+    .btn-primary:active { transform: scale(0.99); }
+    .btn-primary.done { background: var(--positive); color: #07160f; }
+
+    /* QR section */
+    .btn-qr-toggle {
+      width: 100%;
+      height: 38px;
+      border-radius: 8px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background-color 0.15s var(--ease), color 0.15s var(--ease);
+    }
+    .btn-qr-toggle:hover { background: var(--bg-control); color: var(--text-primary); }
+
+    .qr-panel {
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 10px;
+    }
+    .qr-panel.hidden { display: none; }
+
+    .qr-frame {
+      background: #ffffff;
+      padding: 10px;
+      border-radius: 10px;
+      min-width: 184px;
+      min-height: 184px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #qrcode canvas, #qrcode img {
+      display: block;
+      margin: 0 auto;
+    }
+    .qr-caption {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .btn-subtle {
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 6px;
+      background: var(--bg-control);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: color 0.15s var(--ease);
+    }
+    .btn-subtle:hover { color: var(--text-primary); }
+
+    /* Stub */
+    .stub-box {
+      padding: 28px 20px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    .stub-box.hidden { display: none; }
+    .stub-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border-strong);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-secondary);
+    }
+    .stub-title {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .stub-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      max-width: 260px;
+    }
+
+    .hidden { display: none !important; }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-control);
+      border: 1px solid var(--border-strong);
+      color: var(--text-primary);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 8px;
+      z-index: 60;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-layer" aria-hidden="true">
+    <div class="ps-tile ps-tile-deep"></div>
+    <div class="ps-tile ps-tile-main"></div>
+    <div class="bg-glow"></div>
+  </div>
+
+  <noscript>
+    <div style="position:fixed;inset:0;z-index:999;background:#0b0b0d;color:#ededed;display:flex;align-items:center;justify-content:center;padding:20px;text-align:center;">
+      <div>
+        <h2 style="font-size:16px;font-weight:500;margin-bottom:8px;">JavaScript required</h2>
+        <p style="font-size:13px;color:#85858b;">Enable JavaScript to generate your 2FA sign-in code.</p>
+      </div>
+    </div>
+  </noscript>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="brand">
+        <div class="brand-mark">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <div class="brand-title">PlayStation 2FA</div>
+      </div>
+      <div class="status-quiet">
+        <span class="dot-ok"></span>
+        <span>Secure</span>
+      </div>
+    </div>
+
+    <!-- NO KEY STUB -->
+    <div id="no-key-block" class="stub-box hidden">
+      <div class="stub-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      </div>
+      <div class="stub-title">Key not provided</div>
+      <div class="stub-desc">Open this page using your personal link to generate your 2FA sign-in code.</div>
+    </div>
+
+    <!-- ACTIVE 2FA VIEW -->
+    <div id="active-block" class="card-body">
+
+      <!-- Optional Email & Password -->
+      <div id="creds-box" class="creds-box hidden">
+        <div id="row-email" class="cred-row hidden">
+          <div class="cred-left">
+            <div class="cred-label">Sign-in ID</div>
+            <div id="cred-email-val" class="cred-val"></div>
+          </div>
+          <div class="cred-actions">
+            <button class="btn-mini" onclick="copyEmail()">Copy</button>
+          </div>
+        </div>
+        <div id="row-pass" class="cred-row hidden">
+          <div class="cred-left">
+            <div class="cred-label">Password</div>
+            <div id="cred-pass-val" class="cred-val">••••••••</div>
+          </div>
+          <div class="cred-actions">
+            <button id="btn-toggle-pass" class="btn-mini icon-only" onclick="togglePassVisibility()" title="Show password" aria-label="Show password">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+            <button class="btn-mini" onclick="copyPass()">Copy</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2FA TOTP Code Box -->
+      <div class="code-box">
+        <div class="code-top">
+          <span>Sign-in code</span>
+          <span id="timer-text" class="timer-num">30s</span>
+        </div>
+
+        <div class="code-main" onclick="copyCode()" title="Click to copy">
+          <div id="code-val" class="code-val">------</div>
+          <div id="next-code-wrap" class="code-next">Next code: <span id="next-code-val">------</span></div>
+        </div>
+
+        <div class="timer-track">
+          <div id="progress" class="timer-bar"></div>
+        </div>
+
+        <button id="btn-copy-code" class="btn-primary" onclick="copyCode()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <span id="btn-copy-txt">Copy</span>
+        </button>
+      </div>
+
+      <!-- Collapsed QR Toggle -->
+      <button id="qr-toggle-btn" class="btn-qr-toggle" onclick="toggleQr()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM18 18h3v3h-3zM18 14h3M14 18v3"/>
+        </svg>
+        <span id="qr-toggle-label">Show QR code</span>
+      </button>
+
+      <div id="qr-panel" class="qr-panel hidden">
+        <div class="qr-frame">
+          <div id="qrcode"></div>
+        </div>
+        <div class="qr-caption">Scan in Google Authenticator or 2FAS</div>
+        <button class="btn-subtle" onclick="copySecretKey()">Copy key (manual setup)</button>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden">Copied</div>
+
+  <!-- Embedded QRCode.js (0 external requests) -->
+  <script>var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this.parsedData=[];for(var b=[],d=0,e=this.data.length;e>d;d++){var f=this.data.charCodeAt(d);f>65536?(b[0]=240|(1835008&f)>>>18,b[1]=128|(258048&f)>>>12,b[2]=128|(4032&f)>>>6,b[3]=128|63&f):f>2048?(b[0]=224|(61440&f)>>>12,b[1]=128|(4032&f)>>>6,b[2]=128|63&f):f>128?(b[0]=192|(1984&f)>>>6,b[1]=128|63&f):b[0]=f,this.parsedData=this.parsedData.concat(b)}this.parsedData.length!=this.data.length&&(this.parsedData.unshift(191),this.parsedData.unshift(187),this.parsedData.unshift(239))}function b(a,b){this.typeNumber=a,this.errorCorrectLevel=b,this.modules=null,this.moduleCount=0,this.dataCache=null,this.dataList=[]}function i(a,b){if(void 0==a.length)throw new Error(a.length+"/"+b);for(var c=0;c<a.length&&0==a[c];)c++;this.num=new Array(a.length-c+b);for(var d=0;d<a.length-c;d++)this.num[d]=a[d+c]}function j(a,b){this.totalCount=a,this.dataCount=b}function k(){this.buffer=[],this.length=0}function m(){return"undefined"!=typeof CanvasRenderingContext2D}function n(){var a=!1,b=navigator.userAgent;return/android/i.test(b)&&(a=!0,aMat=b.toString().match(/android ([0-9]\.[0-9])/i),aMat&&aMat[1]&&(a=parseFloat(aMat[1]))),a}function r(a,b){for(var c=1,e=s(a),f=0,g=l.length;g>=f;f++){var h=0;switch(b){case d.L:h=l[f][0];break;case d.M:h=l[f][1];break;case d.Q:h=l[f][2];break;case d.H:h=l[f][3]}if(h>=e)break;c++}if(c>l.length)throw new Error("Too long data");return c}function s(a){var b=encodeURI(a).toString().replace(/\%[0-9a-fA-F]{2}/g,"a");return b.length+(b.length!=a?3:0)}a.prototype={getLength:function(){return this.parsedData.length},write:function(a){for(var b=0,c=this.parsedData.length;c>b;b++)a.put(this.parsedData[b],8)}},b.prototype={addData:function(b){var c=new a(b);this.dataList.push(c),this.dataCache=null},isDark:function(a,b){if(0>a||this.moduleCount<=a||0>b||this.moduleCount<=b)throw new Error(a+","+b);return this.modules[a][b]},getModuleCount:function(){return this.moduleCount},make:function(){this.makeImpl(!1,this.getBestMaskPattern())},makeImpl:function(a,c){this.moduleCount=4*this.typeNumber+17,this.modules=new Array(this.moduleCount);for(var d=0;d<this.moduleCount;d++){this.modules[d]=new Array(this.moduleCount);for(var e=0;e<this.moduleCount;e++)this.modules[d][e]=null}this.setupPositionProbePattern(0,0),this.setupPositionProbePattern(this.moduleCount-7,0),this.setupPositionProbePattern(0,this.moduleCount-7),this.setupPositionAdjustPattern(),this.setupTimingPattern(),this.setupTypeInfo(a,c),this.typeNumber>=7&&this.setupTypeNumber(a),null==this.dataCache&&(this.dataCache=b.createData(this.typeNumber,this.errorCorrectLevel,this.dataList)),this.mapData(this.dataCache,c)},setupPositionProbePattern:function(a,b){for(var c=-1;7>=c;c++)if(!(-1>=a+c||this.moduleCount<=a+c))for(var d=-1;7>=d;d++)-1>=b+d||this.moduleCount<=b+d||(this.modules[a+c][b+d]=c>=0&&6>=c&&(0==d||6==d)||d>=0&&6>=d&&(0==c||6==c)||c>=2&&4>=c&&d>=2&&4>=d?!0:!1)},getBestMaskPattern:function(){for(var a=0,b=0,c=0;8>c;c++){this.makeImpl(!0,c);var d=f.getLostPoint(this);(0==c||a>d)&&(a=d,b=c)}return b},createMovieClip:function(a,b,c){var d=a.createEmptyMovieClip(b,c),e=1;this.make();for(var f=0;f<this.modules.length;f++)for(var g=f*e,h=0;h<this.modules[f].length;h++){var i=h*e,j=this.modules[f][h];j&&(d.beginFill(0,100),d.moveTo(i,g),d.lineTo(i+e,g),d.lineTo(i+e,g+e),d.lineTo(i,g+e),d.endFill())}return d},setupTimingPattern:function(){for(var a=8;a<this.moduleCount-8;a++)null==this.modules[a][6]&&(this.modules[a][6]=0==a%2);for(var b=8;b<this.moduleCount-8;b++)null==this.modules[6][b]&&(this.modules[6][b]=0==b%2)},setupPositionAdjustPattern:function(){for(var a=f.getPatternPosition(this.typeNumber),b=0;b<a.length;b++)for(var c=0;c<a.length;c++){var d=a[b],e=a[c];if(null==this.modules[d][e])for(var g=-2;2>=g;g++)for(var h=-2;2>=h;h++)this.modules[d+g][e+h]=-2==g||2==g||-2==h||2==h||0==g&&0==h?!0:!1}},setupTypeNumber:function(a){for(var b=f.getBCHTypeNumber(this.typeNumber),c=0;18>c;c++){var d=!a&&1==(1&b>>c);this.modules[Math.floor(c/3)][c%3+this.moduleCount-8-3]=d}for(var c=0;18>c;c++){var d=!a&&1==(1&b>>c);this.modules[c%3+this.moduleCount-8-3][Math.floor(c/3)]=d}},setupTypeInfo:function(a,b){for(var c=this.errorCorrectLevel<<3|b,d=f.getBCHTypeInfo(c),e=0;15>e;e++){var g=!a&&1==(1&d>>e);6>e?this.modules[e][8]=g:8>e?this.modules[e+1][8]=g:this.modules[this.moduleCount-15+e][8]=g}for(var e=0;15>e;e++){var g=!a&&1==(1&d>>e);8>e?this.modules[8][this.moduleCount-e-1]=g:9>e?this.modules[8][15-e-1+1]=g:this.modules[8][15-e-1]=g}this.modules[this.moduleCount-8][8]=!a},mapData:function(a,b){for(var c=-1,d=this.moduleCount-1,e=7,g=0,h=this.moduleCount-1;h>0;h-=2)for(6==h&&h--;;){for(var i=0;2>i;i++)if(null==this.modules[d][h-i]){var j=!1;g<a.length&&(j=1==(1&a[g]>>>e));var k=f.getMask(b,d,h-i);k&&(j=!j),this.modules[d][h-i]=j,e--,-1==e&&(g++,e=7)}if(d+=c,0>d||this.moduleCount<=d){d-=c,c=-c;break}}}},b.PAD0=236,b.PAD1=17,b.createData=function(a,c,d){for(var e=j.getRSBlocks(a,c),g=new k,h=0;h<d.length;h++){var i=d[h];g.put(i.mode,4),g.put(i.getLength(),f.getLengthInBits(i.mode,a)),i.write(g)}for(var l=0,h=0;h<e.length;h++)l+=e[h].dataCount;if(g.getLengthInBits()>8*l)throw new Error("code length overflow. ("+g.getLengthInBits()+">"+8*l+")");for(g.getLengthInBits()+4<=8*l&&g.put(0,4);0!=g.getLengthInBits()%8;)g.putBit(!1);for(;;){if(g.getLengthInBits()>=8*l)break;if(g.put(b.PAD0,8),g.getLengthInBits()>=8*l)break;g.put(b.PAD1,8)}return b.createBytes(g,e)},b.createBytes=function(a,b){for(var c=0,d=0,e=0,g=new Array(b.length),h=new Array(b.length),j=0;j<b.length;j++){var k=b[j].dataCount,l=b[j].totalCount-k;d=Math.max(d,k),e=Math.max(e,l),g[j]=new Array(k);for(var m=0;m<g[j].length;m++)g[j][m]=255&a.buffer[m+c];c+=k;var n=f.getErrorCorrectPolynomial(l),o=new i(g[j],n.getLength()-1),p=o.mod(n);h[j]=new Array(n.getLength()-1);for(var m=0;m<h[j].length;m++){var q=m+p.getLength()-h[j].length;h[j][m]=q>=0?p.get(q):0}}for(var r=0,m=0;m<b.length;m++)r+=b[m].totalCount;for(var s=new Array(r),t=0,m=0;d>m;m++)for(var j=0;j<b.length;j++)m<g[j].length&&(s[t++]=g[j][m]);for(var m=0;e>m;m++)for(var j=0;j<b.length;j++)m<h[j].length&&(s[t++]=h[j][m]);return s};for(var c={MODE_NUMBER:1,MODE_ALPHA_NUM:2,MODE_8BIT_BYTE:4,MODE_KANJI:8},d={L:1,M:0,Q:3,H:2},e={PATTERN000:0,PATTERN001:1,PATTERN010:2,PATTERN011:3,PATTERN100:4,PATTERN101:5,PATTERN110:6,PATTERN111:7},f={PATTERN_POSITION_TABLE:[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]],G15:1335,G18:7973,G15_MASK:21522,getBCHTypeInfo:function(a){for(var b=a<<10;f.getBCHDigit(b)-f.getBCHDigit(f.G15)>=0;)b^=f.G15<<f.getBCHDigit(b)-f.getBCHDigit(f.G15);return(a<<10|b)^f.G15_MASK},getBCHTypeNumber:function(a){for(var b=a<<12;f.getBCHDigit(b)-f.getBCHDigit(f.G18)>=0;)b^=f.G18<<f.getBCHDigit(b)-f.getBCHDigit(f.G18);return a<<12|b},getBCHDigit:function(a){for(var b=0;0!=a;)b++,a>>>=1;return b},getPatternPosition:function(a){return f.PATTERN_POSITION_TABLE[a-1]},getMask:function(a,b,c){switch(a){case e.PATTERN000:return 0==(b+c)%2;case e.PATTERN001:return 0==b%2;case e.PATTERN010:return 0==c%3;case e.PATTERN011:return 0==(b+c)%3;case e.PATTERN100:return 0==(Math.floor(b/2)+Math.floor(c/3))%2;case e.PATTERN101:return 0==b*c%2+b*c%3;case e.PATTERN110:return 0==(b*c%2+b*c%3)%2;case e.PATTERN111:return 0==(b*c%3+(b+c)%2)%2;default:throw new Error("bad maskPattern:"+a)}},getErrorCorrectPolynomial:function(a){for(var b=new i([1],0),c=0;a>c;c++)b=b.multiply(new i([1,g.gexp(c)],0));return b},getLengthInBits:function(a,b){if(b>=1&&10>b)switch(a){case c.MODE_NUMBER:return 10;case c.MODE_ALPHA_NUM:return 9;case c.MODE_8BIT_BYTE:return 8;case c.MODE_KANJI:return 8;default:throw new Error("mode:"+a)}else if(27>b)switch(a){case c.MODE_NUMBER:return 12;case c.MODE_ALPHA_NUM:return 11;case c.MODE_8BIT_BYTE:return 16;case c.MODE_KANJI:return 10;default:throw new Error("mode:"+a)}else{if(!(41>b))throw new Error("type:"+b);switch(a){case c.MODE_NUMBER:return 14;case c.MODE_ALPHA_NUM:return 13;case c.MODE_8BIT_BYTE:return 16;case c.MODE_KANJI:return 12;default:throw new Error("mode:"+a)}}},getLostPoint:function(a){for(var b=a.getModuleCount(),c=0,d=0;b>d;d++)for(var e=0;b>e;e++){for(var f=0,g=a.isDark(d,e),h=-1;1>=h;h++)if(!(0>d+h||d+h>=b))for(var i=-1;1>=i;i++)0>e+i||e+i>=b||(0!=h||0!=i)&&g==a.isDark(d+h,e+i)&&f++;f>5&&(c+=3+f-5)}for(var d=0;b-1>d;d++)for(var e=0;b-1>e;e++){var j=0;a.isDark(d,e)&&j++,a.isDark(d+1,e)&&j++,a.isDark(d,e+1)&&j++,a.isDark(d+1,e+1)&&j++,(0==j||4==j)&&(c+=3)}for(var d=0;b>d;d++)for(var e=0;b-6>e;e++)a.isDark(d,e)&&!a.isDark(d,e+1)&&a.isDark(d,e+2)&&a.isDark(d,e+3)&&a.isDark(d,e+4)&&!a.isDark(d,e+5)&&a.isDark(d,e+6)&&(c+=40);for(var e=0;b>e;e++)for(var d=0;b-6>d;d++)a.isDark(d,e)&&!a.isDark(d+1,e)&&a.isDark(d+2,e)&&a.isDark(d+3,e)&&a.isDark(d+4,e)&&!a.isDark(d+5,e)&&a.isDark(d+6,e)&&(c+=40);for(var k=0,e=0;b>e;e++)for(var d=0;b>d;d++)a.isDark(d,e)&&k++;var l=Math.abs(100*k/b/b-50)/5;return c+=10*l}},g={glog:function(a){if(1>a)throw new Error("glog("+a+")");return g.LOG_TABLE[a]},gexp:function(a){for(;0>a;)a+=255;for(;a>=256;)a-=255;return g.EXP_TABLE[a]},EXP_TABLE:new Array(256),LOG_TABLE:new Array(256)},h=0;8>h;h++)g.EXP_TABLE[h]=1<<h;for(var h=8;256>h;h++)g.EXP_TABLE[h]=g.EXP_TABLE[h-4]^g.EXP_TABLE[h-5]^g.EXP_TABLE[h-6]^g.EXP_TABLE[h-8];for(var h=0;255>h;h++)g.LOG_TABLE[g.EXP_TABLE[h]]=h;i.prototype={get:function(a){return this.num[a]},getLength:function(){return this.num.length},multiply:function(a){for(var b=new Array(this.getLength()+a.getLength()-1),c=0;c<this.getLength();c++)for(var d=0;d<a.getLength();d++)b[c+d]^=g.gexp(g.glog(this.get(c))+g.glog(a.get(d)));return new i(b,0)},mod:function(a){if(this.getLength()-a.getLength()<0)return this;for(var b=g.glog(this.get(0))-g.glog(a.get(0)),c=new Array(this.getLength()),d=0;d<this.getLength();d++)c[d]=this.get(d);for(var d=0;d<a.getLength();d++)c[d]^=g.gexp(g.glog(a.get(d))+b);return new i(c,0).mod(a)}},j.RS_BLOCK_TABLE=[[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16],[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13],[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15],[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12],[3,145,115,1,146,116],[4,64,40,5,65,41],[11,36,16,5,37,17],[11,36,12,5,37,13],[5,109,87,1,110,88],[5,65,41,5,66,42],[5,54,24,7,55,25],[11,36,12],[5,122,98,1,123,99],[7,73,45,3,74,46],[15,43,19,2,44,20],[3,45,15,13,46,16],[1,135,107,5,136,108],[10,74,46,1,75,47],[1,50,22,15,51,23],[2,42,14,17,43,15],[5,150,120,1,151,121],[9,69,43,4,70,44],[17,50,22,1,51,23],[2,42,14,19,43,15],[3,141,113,4,142,114],[3,70,44,11,71,45],[17,47,21,4,48,22],[9,39,13,16,40,14],[3,135,107,5,136,108],[3,67,41,13,68,42],[15,54,24,5,55,25],[15,43,15,10,44,16],[4,144,116,4,145,117],[17,68,42],[17,50,22,6,51,23],[19,46,16,6,47,17],[2,139,111,7,140,112],[17,74,46],[7,54,24,16,55,25],[34,37,13],[4,151,121,5,152,122],[4,75,47,14,76,48],[11,54,24,14,55,25],[16,45,15,14,46,16],[6,147,117,4,148,118],[6,73,45,14,74,46],[11,54,24,16,55,25],[30,46,16,2,47,17],[8,132,106,4,133,107],[8,75,47,13,76,48],[7,54,24,22,55,25],[22,45,15,13,46,16],[10,142,114,2,143,115],[19,74,46,4,75,47],[28,50,22,6,51,23],[33,46,16,4,47,17],[8,152,122,4,153,123],[22,73,45,3,74,46],[8,53,23,26,54,24],[12,45,15,28,46,16],[3,147,117,10,148,118],[3,73,45,23,74,46],[4,54,24,31,55,25],[11,45,15,31,46,16],[7,146,116,7,147,117],[21,73,45,7,74,46],[1,53,23,37,54,24],[19,45,15,26,46,16],[5,145,115,10,146,116],[19,75,47,10,76,48],[15,54,24,25,55,25],[23,45,15,25,46,16],[13,145,115,3,146,116],[2,74,46,29,75,47],[42,54,24,1,55,25],[23,45,15,28,46,16],[17,145,115],[10,74,46,23,75,47],[10,54,24,35,55,25],[19,45,15,35,46,16],[17,145,115,1,146,116],[14,74,46,21,75,47],[29,54,24,19,55,25],[11,45,15,46,46,16],[13,145,115,6,146,116],[14,74,46,23,75,47],[44,54,24,7,55,25],[59,46,16,1,47,17],[12,151,121,7,152,122],[12,75,47,26,76,48],[39,54,24,14,55,25],[22,45,15,41,46,16],[6,151,121,14,152,122],[6,75,47,34,76,48],[46,54,24,10,55,25],[2,45,15,64,46,16],[17,152,122,4,153,123],[29,74,46,14,75,47],[49,54,24,10,55,25],[24,45,15,46,46,16],[4,152,122,18,153,123],[13,74,46,32,75,47],[48,54,24,14,55,25],[42,45,15,32,46,16],[20,147,117,4,148,118],[40,75,47,7,76,48],[43,54,24,22,55,25],[10,45,15,67,46,16],[19,148,118,6,149,119],[18,75,47,31,76,48],[34,54,24,34,55,25],[20,45,15,61,46,16]],j.getRSBlocks=function(a,b){var c=j.getRsBlockTable(a,b);if(void 0==c)throw new Error("bad rs block @ typeNumber:"+a+"/errorCorrectLevel:"+b);for(var d=c.length/3,e=[],f=0;d>f;f++)for(var g=c[3*f+0],h=c[3*f+1],i=c[3*f+2],k=0;g>k;k++)e.push(new j(h,i));return e},j.getRsBlockTable=function(a,b){switch(b){case d.L:return j.RS_BLOCK_TABLE[4*(a-1)+0];case d.M:return j.RS_BLOCK_TABLE[4*(a-1)+1];case d.Q:return j.RS_BLOCK_TABLE[4*(a-1)+2];case d.H:return j.RS_BLOCK_TABLE[4*(a-1)+3];default:return void 0}},k.prototype={get:function(a){var b=Math.floor(a/8);return 1==(1&this.buffer[b]>>>7-a%8)},put:function(a,b){for(var c=0;b>c;c++)this.putBit(1==(1&a>>>b-c-1))},getLengthInBits:function(){return this.length},putBit:function(a){var b=Math.floor(this.length/8);this.buffer.length<=b&&this.buffer.push(0),a&&(this.buffer[b]|=128>>>this.length%8),this.length++}};var l=[[17,14,11,7],[32,26,20,14],[53,42,32,24],[78,62,46,34],[106,84,60,44],[134,106,74,58],[154,122,86,64],[192,152,108,84],[230,180,130,98],[271,213,151,119],[321,251,177,137],[367,287,203,155],[425,331,241,177],[458,362,258,194],[520,412,292,220],[586,450,322,250],[644,504,364,280],[718,560,394,310],[792,624,442,338],[858,666,482,382],[929,711,509,403],[1003,779,565,439],[1091,857,611,461],[1171,911,661,511],[1273,997,715,535],[1367,1059,751,593],[1465,1125,805,625],[1528,1190,868,658],[1628,1264,908,698],[1732,1370,982,742],[1840,1452,1030,790],[1952,1538,1112,842],[2068,1628,1168,898],[2188,1722,1228,958],[2303,1809,1283,983],[2431,1911,1351,1051],[2563,1989,1423,1093],[2699,2099,1499,1139],[2809,2213,1579,1219],[2953,2331,1663,1273]],o=function(){var a=function(a,b){this._el=a,this._htOption=b};return a.prototype.draw=function(a){function g(a,b){var c=document.createElementNS("http://www.w3.org/2000/svg",a);for(var d in b)b.hasOwnProperty(d)&&c.setAttribute(d,b[d]);return c}var b=this._htOption,c=this._el,d=a.getModuleCount();Math.floor(b.width/d),Math.floor(b.height/d),this.clear();var h=g("svg",{viewBox:"0 0 "+String(d)+" "+String(d),width:"100%",height:"100%",fill:b.colorLight});h.setAttributeNS("http://www.w3.org/2000/xmlns/","xmlns:xlink","http://www.w3.org/1999/xlink"),c.appendChild(h),h.appendChild(g("rect",{fill:b.colorDark,width:"1",height:"1",id:"template"}));for(var i=0;d>i;i++)for(var j=0;d>j;j++)if(a.isDark(i,j)){var k=g("use",{x:String(i),y:String(j)});k.setAttributeNS("http://www.w3.org/1999/xlink","href","#template"),h.appendChild(k)}},a.prototype.clear=function(){for(;this._el.hasChildNodes();)this._el.removeChild(this._el.lastChild)},a}(),p="svg"===document.documentElement.tagName.toLowerCase(),q=p?o:m()?function(){function a(){this._elImage.src=this._elCanvas.toDataURL("image/png"),this._elImage.style.display="block",this._elCanvas.style.display="none"}function d(a,b){var c=this;if(c._fFail=b,c._fSuccess=a,null===c._bSupportDataURI){var d=document.createElement("img"),e=function(){c._bSupportDataURI=!1,c._fFail&&_fFail.call(c)},f=function(){c._bSupportDataURI=!0,c._fSuccess&&c._fSuccess.call(c)};return d.onabort=e,d.onerror=e,d.onload=f,d.src="data:image/gif;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==",void 0}c._bSupportDataURI===!0&&c._fSuccess?c._fSuccess.call(c):c._bSupportDataURI===!1&&c._fFail&&c._fFail.call(c)}if(this._android&&this._android<=2.1){var b=1/window.devicePixelRatio,c=CanvasRenderingContext2D.prototype.drawImage;CanvasRenderingContext2D.prototype.drawImage=function(a,d,e,f,g,h,i,j){if("nodeName"in a&&/img/i.test(a.nodeName))for(var l=arguments.length-1;l>=1;l--)arguments[l]=arguments[l]*b;else"undefined"==typeof j&&(arguments[1]*=b,arguments[2]*=b,arguments[3]*=b,arguments[4]*=b);c.apply(this,arguments)}}var e=function(a,b){this._bIsPainted=!1,this._android=n(),this._htOption=b,this._elCanvas=document.createElement("canvas"),this._elCanvas.width=b.width,this._elCanvas.height=b.height,a.appendChild(this._elCanvas),this._el=a,this._oContext=this._elCanvas.getContext("2d"),this._bIsPainted=!1,this._elImage=document.createElement("img"),this._elImage.style.display="none",this._el.appendChild(this._elImage),this._bSupportDataURI=null};return e.prototype.draw=function(a){var b=this._elImage,c=this._oContext,d=this._htOption,e=a.getModuleCount(),f=d.width/e,g=d.height/e,h=Math.round(f),i=Math.round(g);b.style.display="none",this.clear();for(var j=0;e>j;j++)for(var k=0;e>k;k++){var l=a.isDark(j,k),m=k*f,n=j*g;c.strokeStyle=l?d.colorDark:d.colorLight,c.lineWidth=1,c.fillStyle=l?d.colorDark:d.colorLight,c.fillRect(m,n,f,g),c.strokeRect(Math.floor(m)+.5,Math.floor(n)+.5,h,i),c.strokeRect(Math.ceil(m)-.5,Math.ceil(n)-.5,h,i)}this._bIsPainted=!0},e.prototype.makeImage=function(){this._bIsPainted&&d.call(this,a)},e.prototype.isPainted=function(){return this._bIsPainted},e.prototype.clear=function(){this._oContext.clearRect(0,0,this._elCanvas.width,this._elCanvas.height),this._bIsPainted=!1},e.prototype.round=function(a){return a?Math.floor(1e3*a)/1e3:a},e}():function(){var a=function(a,b){this._el=a,this._htOption=b};return a.prototype.draw=function(a){for(var b=this._htOption,c=this._el,d=a.getModuleCount(),e=Math.floor(b.width/d),f=Math.floor(b.height/d),g=['<table style="border:0;border-collapse:collapse;">'],h=0;d>h;h++){g.push("<tr>");for(var i=0;d>i;i++)g.push('<td style="border:0;border-collapse:collapse;padding:0;margin:0;width:'+e+"px;height:"+f+"px;background-color:"+(a.isDark(h,i)?b.colorDark:b.colorLight)+';"></td>');g.push("</tr>")}g.push("</table>"),c.innerHTML=g.join("");var j=c.childNodes[0],k=(b.width-j.offsetWidth)/2,l=(b.height-j.offsetHeight)/2;k>0&&l>0&&(j.style.margin=l+"px "+k+"px")},a.prototype.clear=function(){this._el.innerHTML=""},a}();QRCode=function(a,b){if(this._htOption={width:256,height:256,typeNumber:4,colorDark:"#000000",colorLight:"#ffffff",correctLevel:d.H},"string"==typeof b&&(b={text:b}),b)for(var c in b)this._htOption[c]=b[c];"string"==typeof a&&(a=document.getElementById(a)),this._android=n(),this._el=a,this._oQRCode=null,this._oDrawing=new q(this._el,this._htOption),this._htOption.text&&this.makeCode(this._htOption.text)},QRCode.prototype.makeCode=function(a){this._oQRCode=new b(r(a,this._htOption.correctLevel),this._htOption.correctLevel),this._oQRCode.addData(a),this._oQRCode.make(),this._el.title=a,this._oDrawing.draw(this._oQRCode),this.makeImage()},QRCode.prototype.makeImage=function(){"function"==typeof this._oDrawing.makeImage&&(!this._android||this._android>=3)&&this._oDrawing.makeImage()},QRCode.prototype.clear=function(){this._oDrawing.clear()},QRCode.CorrectLevel=d}();</script>
+
+  <script>
+    let SECRET = '';
+    let EMAIL = '';
+    let PASS = '';
+    let passVisible = false;
+    let qrOpen = false;
+    let qrRendered = false;
+    let cachedCryptoKey = null;
+    let cachedSecret = '';
+    let tickInterval = null;
+    let toastTimer = null;
+
+    const LINK_DOMAINS = [
+      '', '@outlook.com', '@gmail.com', '@hotmail.com', '@rambler.ru',
+      '@mail.ru', '@yandex.ru', '@firstmail.ltd', '@proton.me', '@icloud.com'
+    ];
+
+    function b64UrlToBytes(str) {
+      const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+      const pad = b64 + '==='.slice((b64.length + 3) % 4);
+      const bin = atob(pad);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    }
+
+    function bytesToBase32(bytes) {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+      let bits = '';
+      for (let b of bytes) bits += b.toString(2).padStart(8, '0');
+      let out = '';
+      for (let i = 0; i < bits.length; i += 5) {
+        out += chars[parseInt(bits.slice(i, i + 5).padEnd(5, '0'), 2)];
+      }
+      return out;
+    }
+
+    function decodeCompactPayload(token) {
+      const bytes = b64UrlToBytes(token);
+      let pos = 0;
+      const flags = bytes[pos++];
+      const hasPass = Boolean(flags & 0x80);
+      const hasEmail = Boolean(flags & 0x40);
+      const domainCode = flags & 0x0f;
+      const keyLen = bytes[pos++];
+      const keyBytes = bytes.slice(pos, pos + keyLen); pos += keyLen;
+      const key = bytesToBase32(keyBytes);
+      const dec = new TextDecoder();
+      let email = '';
+      if (hasEmail) {
+        const eLen = bytes[pos++];
+        const eStr = dec.decode(bytes.slice(pos, pos + eLen)); pos += eLen;
+        email = domainCode > 0 && LINK_DOMAINS[domainCode] ? (eStr + LINK_DOMAINS[domainCode]) : eStr;
+      }
+      let pass = '';
+      if (hasPass) {
+        const pLen = bytes[pos++];
+        pass = dec.decode(bytes.slice(pos, pos + pLen)); pos += pLen;
+      }
+      return { key, email, pass };
+    }
+
+    function decodePayloadB64(str) {
+      return JSON.parse(new TextDecoder().decode(b64UrlToBytes(str)));
+    }
+
+    function extractParams() {
+      const hashStr = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+      const hashParams = new URLSearchParams(hashStr);
+      const queryParams = new URLSearchParams(window.location.search);
+
+      // 1. New 2x compact binary link (#c=...)
+      const cToken = hashParams.get('c') || queryParams.get('c') || '';
+      if (cToken) {
+        try {
+          const obj = decodeCompactPayload(cToken);
+          const k = (obj.key || '').trim().toUpperCase().replace(/[^A-Z2-7=]/g, '');
+          if (k.length >= 8) {
+            return { key: k, email: (obj.email || '').trim(), pass: (obj.pass || '').trim(), fromUrl: true };
+          }
+        } catch (err) {}
+      }
+
+      // 2. JSON Base64url link (#d=...)
+      const dToken = hashParams.get('d') || queryParams.get('d') || '';
+      if (dToken) {
+        try {
+          const obj = decodePayloadB64(dToken);
+          const k = (obj.k || '').trim().toUpperCase().replace(/[^A-Z2-7=]/g, '');
+          const e = (obj.e || '').trim();
+          const p = (obj.p || '').trim();
+          if (k.length >= 8) {
+            return { key: k, email: e, pass: p, fromUrl: true };
+          }
+        } catch (err) {}
+      }
+
+      // 3. Classic link (#key=...&email=...)
+      const rawKey = (hashParams.get('key') || queryParams.get('key') || '').trim();
+      const k = rawKey.toUpperCase().replace(/[^A-Z2-7=]/g, '');
+      const e = (hashParams.get('email') || queryParams.get('email') || '').trim();
+      const p = (hashParams.get('p') || queryParams.get('p') || '').trim();
+      if (k && k !== 'NO_KEY' && k.length >= 8) {
+        return { key: k, email: e, pass: p, fromUrl: true };
+      }
+
+      // 4. Restore from sessionStorage on page reload after replaceState
+      try {
+        const saved = sessionStorage.getItem('ps_2fa_session_v1');
+        if (saved) {
+          const obj = JSON.parse(saved);
+          if (obj && obj.key && obj.key.length >= 8) {
+            return { key: obj.key, email: obj.email || '', pass: obj.pass || '', fromUrl: false };
+          }
+        }
+      } catch (err) {}
+
+      return { key: '', email: '', pass: '', fromUrl: false };
+    }
+
+    function initFromParams() {
+      const data = extractParams();
+      SECRET = data.key;
+      EMAIL = data.email;
+      PASS = data.pass;
+      cachedCryptoKey = null;
+      cachedSecret = '';
+      qrRendered = false;
+
+      if (data.fromUrl && SECRET) {
+        try {
+          sessionStorage.setItem('ps_2fa_session_v1', JSON.stringify({ key: SECRET, email: EMAIL, pass: PASS }));
+        } catch (err) {}
+        try {
+          window.history.replaceState(null, '', window.location.pathname || '/');
+        } catch (err) {}
+      }
+
+      const activeBlock = document.getElementById('active-block');
+      const noKeyBlock = document.getElementById('no-key-block');
+
+      if (!SECRET || SECRET.length < 8) {
+        activeBlock.classList.add('hidden');
+        noKeyBlock.classList.remove('hidden');
+        if (tickInterval) clearInterval(tickInterval);
+        return;
+      }
+
+      noKeyBlock.classList.add('hidden');
+      activeBlock.classList.remove('hidden');
+
+      // Render Email & Password if provided
+      const credsBox = document.getElementById('creds-box');
+      const rowEmail = document.getElementById('row-email');
+      const rowPass = document.getElementById('row-pass');
+      if (EMAIL || PASS) {
+        credsBox.classList.remove('hidden');
+        if (EMAIL) {
+          document.getElementById('cred-email-val').innerText = EMAIL;
+          rowEmail.classList.remove('hidden');
+        } else {
+          rowEmail.classList.add('hidden');
+        }
+        if (PASS) {
+          passVisible = false;
+          document.getElementById('cred-pass-val').innerText = '••••••••';
+          rowPass.classList.remove('hidden');
+        } else {
+          rowPass.classList.add('hidden');
+        }
+      } else {
+        credsBox.classList.add('hidden');
+      }
+
+      if (qrOpen) renderQrIfNeeded();
+
+      if (tickInterval) clearInterval(tickInterval);
+      tickInterval = setInterval(tick, 1000);
+      tick();
+    }
+
+    function renderQrIfNeeded() {
+      if (qrRendered || !SECRET) return;
+      const qrElem = document.getElementById('qrcode');
+      qrElem.innerHTML = '';
+      const label = EMAIL ? ('PlayStation:' + EMAIL) : 'PlayStation';
+      const otpUri = 'otpauth://totp/' + encodeURIComponent(label) + '?secret=' + SECRET + '&issuer=PlayStation';
+      try {
+        if (typeof QRCode !== 'undefined') {
+          new QRCode(qrElem, {
+            text: otpUri,
+            width: 164,
+            height: 164,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+          });
+          qrRendered = true;
+        }
+      } catch (err) {}
+    }
+
+    function toggleQr() {
+      qrOpen = !qrOpen;
+      document.getElementById('qr-panel').classList.toggle('hidden', !qrOpen);
+      document.getElementById('qr-toggle-label').innerText = qrOpen ? 'Hide QR code' : 'Show QR code';
+      if (qrOpen) renderQrIfNeeded();
+    }
+
+    function togglePassVisibility() {
+      if (!PASS) return;
+      passVisible = !passVisible;
+      document.getElementById('cred-pass-val').innerText = passVisible ? PASS : '••••••••';
+    }
+
+    async function getCryptoKey() {
+      if (cachedCryptoKey && cachedSecret === SECRET) return cachedCryptoKey;
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+      const clean = SECRET.replace(/=+$/, '').replace(/\s+/g, '');
+      let bits = '';
+      for (let c of clean) {
+        const val = chars.indexOf(c);
+        if (val !== -1) bits += val.toString(2).padStart(5, '0');
+      }
+      const bytes = [];
+      for (let i = 0; i + 8 <= bits.length; i += 8) {
+        bytes.push(parseInt(bits.slice(i, i + 8), 2));
+      }
+      cachedCryptoKey = await window.crypto.subtle.importKey(
+        'raw', new Uint8Array(bytes), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']
+      );
+      cachedSecret = SECRET;
+      return cachedCryptoKey;
+    }
+
+    async function computeTotpAtCounter(cryptoKey, counter) {
+      const buffer = new ArrayBuffer(8);
+      new DataView(buffer).setBigUint64(0, BigInt(counter), false);
+      const sig = new Uint8Array(await window.crypto.subtle.sign('HMAC', cryptoKey, buffer));
+      const offset = sig[19] & 0x0f;
+      const codeNum = ((sig[offset] & 0x7f) << 24) |
+                      ((sig[offset + 1] & 0xff) << 16) |
+                      ((sig[offset + 2] & 0xff) << 8) |
+                      (sig[offset + 3] & 0xff);
+      return (codeNum % 1000000).toString().padStart(6, '0');
+    }
+
+    async function calculateTotp() {
+      if (!SECRET) return;
+      try {
+        const key = await getCryptoKey();
+        const counter = Math.floor(Math.floor(Date.now() / 1000) / 30);
+        const [curCode, nextCode] = await Promise.all([
+          computeTotpAtCounter(key, counter),
+          computeTotpAtCounter(key, counter + 1)
+        ]);
+        const codeElem = document.getElementById('code-val');
+        const nextElem = document.getElementById('next-code-val');
+        if (codeElem) codeElem.innerText = curCode;
+        if (nextElem) nextElem.innerText = nextCode;
+      } catch (e) {
+        const codeElem = document.getElementById('code-val');
+        if (codeElem) codeElem.innerText = 'ERROR';
+      }
+    }
+
+    function tick() {
+      const epoch = Math.floor(Date.now() / 1000);
+      const remaining = 30 - (epoch % 30);
+      const timerElem = document.getElementById('timer-text');
+      const progElem = document.getElementById('progress');
+
+      timerElem.innerText = remaining + 's';
+      progElem.style.transform = 'scaleX(' + (remaining / 30) + ')';
+
+      const isWarn = remaining <= 5;
+      progElem.classList.toggle('warn', isWarn);
+      timerElem.classList.toggle('warn', isWarn);
+
+      const codeElem = document.getElementById('code-val');
+      const currentCode = codeElem ? codeElem.innerText.trim() : '';
+      if (remaining === 30 || currentCode === '------' || currentCode === 'ERROR' || currentCode === '') {
+        calculateTotp();
+      }
+    }
+
+    function triggerHaptic() {
+      if ('vibrate' in navigator) {
+        try { navigator.vibrate(15); } catch (e) {}
+      }
+    }
+
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator && document.visibilityState === 'visible') {
+          await navigator.wakeLock.request('screen');
+        }
+      } catch (err) {}
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') requestWakeLock();
+    });
+    requestWakeLock();
+
+    function showToast(msg) {
+      triggerHaptic();
+      const t = document.getElementById('toast');
+      t.innerText = msg || 'Copied';
+      t.classList.remove('hidden');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.add('hidden'), 1600);
+    }
+
+    function copyTextSafe(value, toastMsg) {
+      if (!value) return;
+      showToast(toastMsg);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(value).catch(() => {});
+      }
+    }
+
+    function copyCode() {
+      const codeElem = document.getElementById('code-val');
+      const c = codeElem ? codeElem.innerText.trim() : '';
+      if (!c || c === '------' || c === 'ERROR') return;
+      copyTextSafe(c, 'Copied');
+      const btn = document.getElementById('btn-copy-code');
+      const txt = document.getElementById('btn-copy-txt');
+      btn.classList.add('done');
+      txt.innerText = 'Copied';
+      setTimeout(() => {
+        btn.classList.remove('done');
+        txt.innerText = 'Copy';
+      }, 1200);
+    }
+
+    function copyEmail() { copyTextSafe(EMAIL, 'Sign-in ID copied'); }
+    function copyPass() { copyTextSafe(PASS, 'Password copied'); }
+    function copySecretKey() { copyTextSafe(SECRET, 'Key copied'); }
+
+    window.addEventListener('hashchange', initFromParams);
+    initFromParams();
+  </script>
+</body>
+</html>
