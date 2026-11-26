@@ -103,15 +103,14 @@
       overflow-x: hidden;
     }
 
-    /* Clean Graphite + 4-Color PlayStation Symbols Background (NO color blotches) */
+    /* Clean Graphite + 4-Color PlayStation Symbols Background (0-overhead GPU static pattern) */
     .bg-layer {
       position: fixed;
       inset: 0;
       z-index: 0;
       pointer-events: none;
       overflow: hidden;
-      background: var(--bg-gradient);
-      contain: strict;
+      background: var(--lg-bg-grad, var(--bg-gradient));
     }
     .bg-glow {
       position: absolute;
@@ -121,58 +120,33 @@
     }
     .ps-tile {
       position: absolute;
-      inset: -340px;
-      will-change: transform;
-      backface-visibility: hidden;
+      inset: 0;
       background-repeat: repeat;
     }
     .ps-tile-main {
       z-index: 3;
       background-image: var(--tile-main);
       background-size: 180px 180px;
-      animation: driftAsyncA 23s linear infinite;
     }
     .ps-tile-deep {
       z-index: 2;
       background-image: var(--tile-deep);
       background-size: 220px 220px;
-      animation: driftAsyncB 37s linear infinite;
-    }
-    @keyframes driftAsyncA {
-      from { transform: translate3d(0, 0, 0); }
-      to   { transform: translate3d(180px, -360px, 0); }
-    }
-    @keyframes driftAsyncB {
-      from { transform: translate3d(0, 0, 0); }
-      to   { transform: translate3d(-220px, -220px, 0); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .ps-tile { animation: none; }
     }
 
-    /* Liquid Glass Card */
+    /* Liquid Glass Card (single cached backdrop layer, zero continuous repaints) */
     .card {
       position: relative;
       z-index: 1;
       max-width: 384px;
       width: 100%;
-      background: var(--card-bg);
-      backdrop-filter: blur(26px) saturate(145%);
-      -webkit-backdrop-filter: blur(26px) saturate(145%);
+      background: var(--card-sheen), var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       border: 1px solid var(--card-border);
       border-radius: 24px;
       box-shadow: var(--card-shadow);
       overflow: hidden;
-      contain: layout style;
-      transition: background 0.25s var(--ease), border-color 0.25s var(--ease), box-shadow 0.25s var(--ease);
-    }
-    .card::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: var(--card-sheen);
-      pointer-events: none;
-      z-index: 0;
     }
     .card > * { position: relative; z-index: 1; }
 
@@ -379,7 +353,8 @@
       background: var(--accent);
       transform-origin: left;
       will-change: transform;
-      transition: transform 1s linear, background-color 0.2s var(--ease);
+      transform: translateZ(0);
+      transition: transform 0.25s linear, background-color 0.2s var(--ease);
     }
     .timer-bar.warn { background: var(--negative); }
 
